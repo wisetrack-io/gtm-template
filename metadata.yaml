@@ -15,5 +15,5 @@
 homepage: "https://www.wisetrack.io"
 documentation: "https://github.com/wisetrack-io/gtm-load-template"
 versions:
-  - sha: 63edf9a3fb0bdeb338e6280cf30cc0e5345946e3
+  - sha: 5182e178c5e33f42714803bd1e80cd4e1b92cd92
     changeNotes: Initial Version
