@@ -15,5 +15,10 @@
 homepage: "https://www.wisetrack.io"
 documentation: "https://github.com/wisetrack-io/gtm-load-template"
 versions:
+  - sha: 0ef81f3409af9390f84302cfc87dd5988e77c7ed
+    changeNotes: |2
+      Added Track Screen, Set Push Token, Set Log Level and Enable/Disable actions.
+      Added Client Secret, screen tracking settings and deeplink dataLayer push.
+      Requires WiseTrack Web SDK 2.3.3+ for the new actions.
   - sha: 5182e178c5e33f42714803bd1e80cd4e1b92cd92
     changeNotes: Initial Version
