@@ -13,7 +13,7 @@
 # limitations under the License.
 
 homepage: "https://www.wisetrack.io"
-documentation: "https://github.com/wisetrack-io/gtm-load-template"
+documentation: "https://github.com/wisetrack-io/gtm-template"
 versions:
   - sha: 0ef81f3409af9390f84302cfc87dd5988e77c7ed
     changeNotes: |2
