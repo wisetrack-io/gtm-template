@@ -330,7 +330,7 @@ Set **Log Level** to **Debug** to see the SDK's own messages in the browser cons
 
 - WiseTrack documentation: <https://docs.wisetrack.io>
 - WiseTrack Web SDK: <https://github.com/wisetrack-io/web-sdk>
-- Template issues and feature requests: [GitHub Issues](https://github.com/wisetrack-io/gtm-load-template/issues)
+- Template issues and feature requests: [GitHub Issues](https://github.com/wisetrack-io/gtm-template/issues)
 
 ## License
 
