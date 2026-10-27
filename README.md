@@ -24,6 +24,8 @@ changing your site's code.
   - [Enable / Disable SDK](#enable--disable-sdk)
   - [Flush](#flush)
 - [Deeplinks in the dataLayer](#deeplinks-in-the-datalayer)
+- [Event mirroring](#event-mirroring)
+- [Send events to GA4 and Google Ads](#send-events-to-ga4-and-google-ads)
 - [Recipes](#recipes)
 - [SDK loading and compatibility](#sdk-loading-and-compatibility)
 - [Permissions](#permissions)
@@ -38,6 +40,7 @@ changing your site's code.
 - **Event tracking.** Tracks custom events and revenue events, with optional parameters.
 - **Manual screen views.** Track Screen records views that do not change the URL, such as tabs, steps, bottom sheets and overlays.
 - **Deeplinks.** The SDK handles WiseTrack deeplinks and deferred deeplinks. The tag can push each one to the `dataLayer` so other tags and triggers can use it.
+- **Event mirroring.** Pushes every tracked event to the `dataLayer`, so you can send the same events to other tools. A ready-made container sends them to Google Analytics 4 and Google Ads.
 - **Push notifications.** Sends the browser's Firebase Cloud Messaging (FCM) token to WiseTrack.
 - **Runtime control.** Start or stop tracking (for example for consent), enable or disable the SDK, change the log level, and flush stored data.
 
@@ -147,6 +150,13 @@ when automatic screen tracking is on.
 | Default Tracker | — | Optional. The name of a default tracker from the WiseTrack panel to attribute this traffic to. |
 | Custom Device ID | — | Optional. Your own identifier for this browser, for example a first-party ID read from a cookie variable. If empty, the SDK generates one. |
 
+**Event Mirroring**
+
+| Field | Default | Description |
+|---|---|---|
+| Mirror tracked events to the dataLayer | Off | Pushes every event sent by a **Track Event** tag on the page to the `dataLayer`. See [Event mirroring](#event-mirroring). |
+| Mirror Event Name | `wisetrack_event` | The `event` value of the mirrored `dataLayer` push. |
+
 ### Track Event
 
 | Field | Description |
@@ -245,6 +255,71 @@ To use it:
 
 Each deeplink is pushed once per page load.
 
+## Event mirroring
+
+When **Mirror tracked events to the dataLayer** is on in the initialization tag, every **Track
+Event** tag on the page also pushes the event it sent to WiseTrack:
+
+```js
+{
+  event: 'wisetrack_event',          // the "Mirror Event Name" setting
+  wisetrack: {
+    event_name: 'purchase',          // Event Name
+    event_type: 'revenue',           // default | revenue
+    value: 149.99,                   // revenue events only
+    currency: 'USD',                 // revenue events only
+    params: { order_id: 'A-1001' }   // Event Parameters
+  },
+  _clear: true
+}
+```
+
+Use it to send WiseTrack events to any other tool without defining them twice:
+
+1. Create **Data Layer Variables** for the keys you need, such as `wisetrack.event_name`,
+   `wisetrack.value` or `wisetrack.params.order_id`.
+2. Create a **Custom Event** trigger with the event name `wisetrack_event`.
+3. Attach the other tool's tags to that trigger.
+
+Notes:
+
+- The setting is read from the initialization tag, so it applies to all Track Event tags on the page. Track Event tags that fire before the initialization tag are not mirrored.
+- The push happens only after the event was handed to the SDK. Events of a failed Track Event tag are not mirrored.
+- `_clear: true` replaces the previous `wisetrack` object, so values of an earlier event, such as `value`, never carry over into the next one.
+- Screen views are not mirrored. Tools such as GA4 record page views themselves, and mirroring them would count them twice.
+
+## Send events to GA4 and Google Ads
+
+[`recipes/wisetrack-ga4-google-ads.json`](recipes/wisetrack-ga4-google-ads.json) is a GTM container
+that sends mirrored events to Google Analytics 4 and Google Ads with Google's own tags. It needs
+[Event mirroring](#event-mirroring) to be on.
+
+| Item | Type | What it does |
+|---|---|---|
+| WT - GA4 Measurement ID | Constant | Your GA4 Measurement ID, `G-…` |
+| WT - Google Ads Conversion ID | Constant | Your Google Ads Conversion ID, the number after `AW-` |
+| WT - Google Ads Conversion Label | Lookup Table | Maps WiseTrack event names to Google Ads conversion labels |
+| WT - Event Name, Event Type, Value, Currency, Order ID | Data Layer Variables | Read the mirrored event. Order ID reads `wisetrack.params.order_id`. |
+| WT - GA4 Event Name | Custom JavaScript | Turns the event name into a valid GA4 event name, for example `test-event` → `test_event` |
+| WT - Google Tag (GA4) | Google tag | Loads GA4 on *Initialization - All Pages* |
+| WT - GA4 Event | GA4 Event | Sends every mirrored event to GA4, with `value`, `currency` and `transaction_id` |
+| WT - Google Ads Conversion | Google Ads Conversion Tracking | Sends the events listed in the Lookup Table as conversions |
+| WT - Conversion Linker | Conversion Linker | Stores Google Ads click IDs on *All Pages* |
+| WT - Mirrored Event, WT - Mirrored Event - Google Ads Conversion | Custom Event triggers | Fire on `wisetrack_event`. The second one fires only for events in the Lookup Table. |
+
+To use it:
+
+1. In GTM, go to **Admin** → **Import Container** and choose the JSON file.
+2. Choose your workspace, then **Merge** → **Rename conflicting tags, triggers, and variables**.
+3. Set **WT - GA4 Measurement ID** and **WT - Google Ads Conversion ID**.
+4. In **WT - Google Ads Conversion Label**, add a row for each WiseTrack event that is a Google Ads conversion, with the label of its conversion action.
+5. If your container already has a Google tag for the same Measurement ID, or a Conversion Linker, delete the copy from the recipe.
+6. To send other event parameters to GA4, add a Data Layer Variable for `wisetrack.params.<key>` and a row in **WT - GA4 Event**.
+7. If you changed **Mirror Event Name**, change both triggers to match.
+8. Test in **Preview**: each `wisetrack_event` should fire **WT - GA4 Event**, and events in the Lookup Table should also fire **WT - Google Ads Conversion**.
+
+The Google tags respect Consent Mode on their own, independently of the WiseTrack tag.
+
 ## Recipes
 
 ### Consent-based tracking
@@ -309,7 +384,8 @@ The template asks for these permissions only:
 | Permission | Why |
 |---|---|
 | Injects scripts | Loads the SDK bundle from `unpkg.com` and, as a fallback, from `cdn.jsdelivr.net`. |
-| Accesses global variables | Reads `WiseTrackSDK` and calls the SDK methods the actions use, under `WiseTrackSDK.WiseTrack.instance.*`. Writes to `dataLayer` to push deeplinks. |
+| Accesses global variables | Reads `WiseTrackSDK` and calls the SDK methods the actions use, under `WiseTrackSDK.WiseTrack.instance.*`. Writes to `dataLayer` to push deeplinks and mirrored events. |
+| Accesses template storage | Shares the event mirroring setting of the initialization tag with the Track Event tags on the same page. |
 | Logs to console | Writes diagnostic messages, in Preview and debug mode only. |
 
 ## Troubleshooting
@@ -323,6 +399,8 @@ The template asks for these permissions only:
 | A revenue event is rejected | The amount must be a number, such as `99.99` rather than `99,99`. The currency must be a supported uppercase code. |
 | Screens are tracked twice | Increase **Deduplication Window (ms)**. Do not use a Track Screen tag for views that automatic tracking already records. |
 | A page is not tracked | Check whether the page matches **Excluded Screen Paths** or **Excluded Screen Patterns**. For dialogs, check for a `data-wt-no-track` attribute. |
+| No `wisetrack_event` in the dataLayer | Turn on **Mirror tracked events to the dataLayer** in the initialization tag, and make sure the initialization tag fires before your Track Event tags. |
+| GA4 or Google Ads tags do not fire | Check that the trigger's event name matches **Mirror Event Name**. Google Ads only fires for event names listed in **WT - Google Ads Conversion Label**. |
 
 Set **Log Level** to **Debug** to see the SDK's own messages in the browser console.
 

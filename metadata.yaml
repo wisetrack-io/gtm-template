@@ -19,6 +19,7 @@ versions:
     changeNotes: |2
       Added Track Screen, Set Push Token, Set Log Level and Enable/Disable actions.
       Added Client Secret, screen tracking settings and deeplink dataLayer push.
+      Added event mirroring to the dataLayer, with a recipe container for GA4 and Google Ads.
       Requires WiseTrack Web SDK 2.3.3+ for the new actions.
   - sha: 5182e178c5e33f42714803bd1e80cd4e1b92cd92
     changeNotes: Initial Version

@@ -456,6 +456,43 @@ ___TEMPLATE_PARAMETERS___
             "help": "Optional. Your own identifier for this device/browser (e.g. a first-party ID from a cookie variable). Leave empty to let the SDK generate one."
           }
         ]
+      },
+      {
+        "displayName": "Event Mirroring",
+        "name": "mirrorGroup",
+        "groupStyle": "ZIPPY_CLOSED",
+        "type": "GROUP",
+        "subParams": [
+          {
+            "type": "CHECKBOX",
+            "name": "mirrorEventsToDataLayer",
+            "checkboxText": "Mirror tracked events to the dataLayer",
+            "simpleValueType": true,
+            "defaultValue": false,
+            "help": "When enabled, every event sent by a <strong>Track Event</strong> tag is also pushed to the <code>dataLayer</code> as <code>{event: '&lt;event name&gt;', wisetrack: {event_name, event_type, value, currency, params}}</code>. <code>value</code> and <code>currency</code> are set only for revenue events. Use a <em>Custom Event</em> trigger and <em>Data Layer Variables</em> to forward the events to other tools, such as Google Analytics 4 or Google Ads. Screen views are not mirrored."
+          },
+          {
+            "displayName": "Mirror Event Name",
+            "name": "mirrorEventName",
+            "type": "TEXT",
+            "simpleValueType": true,
+            "defaultValue": "wisetrack_event",
+            "valueHint": "wisetrack_event",
+            "help": "The <code>event</code> value of the dataLayer push. Use it as the event name of your Custom Event trigger.",
+            "valueValidators": [
+              {
+                "type": "NON_EMPTY"
+              }
+            ],
+            "enablingConditions": [
+              {
+                "paramName": "mirrorEventsToDataLayer",
+                "paramValue": true,
+                "type": "EQUALS"
+              }
+            ]
+          }
+        ]
       }
     ]
   },
@@ -883,8 +920,11 @@ const makeInteger = require('makeInteger');
 const makeNumber = require('makeNumber');
 const callInWindow = require('callInWindow');
 const createQueue = require('createQueue');
+const templateStorage = require('templateStorage');
 
 const action = data.action;
+
+const MIRROR_STORAGE_KEY = 'mirrorEventName';
 
 function isWiseTrackAvailable(){
   const WiseTrackSDK = copyFromWindow('WiseTrackSDK');
@@ -949,6 +989,40 @@ function registerDeeplinkListener() {
       wisetrack_deeplink: uri,
       wisetrack_deeplink_deferred: isDeferred === true
     });
+  });
+}
+
+// Save the event mirroring setting of the initialization tag, so the Track
+// Event tags of this page can read it. Template storage lasts for the page.
+function saveMirrorSetting() {
+  if (data.mirrorEventsToDataLayer) {
+    templateStorage.setItem(MIRROR_STORAGE_KEY, data.mirrorEventName || 'wisetrack_event');
+  } else {
+    templateStorage.removeItem(MIRROR_STORAGE_KEY);
+  }
+}
+
+// Push a tracked event to the dataLayer when event mirroring is enabled.
+// _clear replaces the previous wisetrack object instead of merging into it,
+// so values of an earlier event never leak into this one.
+function mirrorEvent(eventObject) {
+  const eventName = templateStorage.getItem(MIRROR_STORAGE_KEY);
+  if (!eventName) return;
+
+  const mirrored = {
+    event_name: eventObject.name,
+    event_type: eventObject.type,
+    params: eventObject.params
+  };
+  if (eventObject.type === 'revenue') {
+    mirrored.value = eventObject.amount;
+    mirrored.currency = eventObject.currency;
+  }
+
+  createQueue('dataLayer')({
+    event: eventName,
+    wisetrack: mirrored,
+    _clear: true
   });
 }
 
@@ -1033,6 +1107,7 @@ function trackEvent() {
   }
 
   callInWindow('WiseTrackSDK.WiseTrack.instance.trackEvent', eventObject);
+  mirrorEvent(eventObject);
   data.gtmOnSuccess();
 }
 
@@ -1163,6 +1238,10 @@ function executeAction() {
 
 // Main execution
 const existingSDK = copyFromWindow('WiseTrackSDK');
+
+// Saved before the SDK loads, so Track Event tags that fire while the SDK
+// script is still downloading already see it.
+if (action === 'initialize') saveMirrorSetting();
 
 if (action === 'initialize' && !existingSDK) {
   injectPackage(
@@ -1762,6 +1841,16 @@ ___WEB_PERMISSIONS___
     },
     "clientAnnotations": {
       "isEditedByUser": true
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "access_template_storage",
+        "versionId": "1"
+      },
+      "param": []
     },
     "isRequired": true
   }
